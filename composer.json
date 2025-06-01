@@ -1,0 +1,29 @@
+{
+    "name": "petstack/lite-env",
+    "description": "Minimal and lightweight .env parser for PHP with no dependencies.",
+    "type": "library",
+    "license": "MIT",
+    "version": "1.0.0",
+    "autoload": {
+        "psr-4": {
+            "PetStack\\LiteEnv\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PetStack\\LiteEnv\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Vasili Kamrakou",
+            "email": "diolektor@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=8.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.5"
+    }
+}
