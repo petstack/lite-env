@@ -9,7 +9,7 @@ use RuntimeException;
 class Env
 {
     private const ENV_DEFAULT_PATH = '.env';
-    private const VALID_KEY_PATTERN = '/^[a-zA-Z_]\w*$/';
+    private const VALID_KEY_PATTERN = '/^[A-Z_][A-Z0-9_]*$/';
     private const VARIABLE_PATTERN_COMBINED = '/(?:\$\{(?>[A-Z_][A-Z0-9_]*)\})|(?:(?<!\\\\)\$(?>([A-Z_][A-Z0-9_]*)))/';
 
     private static array $cacheKeys = [];
