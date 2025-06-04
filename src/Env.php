@@ -20,7 +20,7 @@ class Env
      * This method accepts multiple file paths or arrays of file paths and loads
      * environment variables from each file by calling the load() method.
      *
-     * @param mixed ...$paths One or more file paths or arrays of file paths to .env files
+     * @param string|string[] ...$paths One or more file paths or arrays of file paths to .env files
      * @return void
      */
     public static function loadMultiple(...$paths): void
