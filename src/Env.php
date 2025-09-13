@@ -185,8 +185,11 @@ class Env
                 ];
             }
 
-            if (\str_contains($value, ' #')) {
-                $value = \substr($value, 1, \strpos($value, ' #') - 2);
+            $value = \substr($line, $equals + 2);
+
+            if (\str_contains($value, $quoteChar)) {
+                $value = \substr($value, 0, \strpos(\substr($line, $equals + 2), $quoteChar));
+
                 return [
                     'inQuotes' => false,
                     'quoteChar' => '',
@@ -195,8 +198,6 @@ class Env
                     'shouldSetVariable' => true,
                 ];
             }
-
-            $value = \substr($line, $equals + 2);
 
             return [
                 'inQuotes' => true,
@@ -208,7 +209,7 @@ class Env
         }
 
         if (\str_contains($value, ' #')) {
-            $value = \substr($value, 0, \strpos($value, ' #'));
+            $value = \rtrim(\substr($value, 0, \strpos($value, ' #')));
         }
 
         return [

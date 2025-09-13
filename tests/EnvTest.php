@@ -357,6 +357,22 @@ class EnvTest extends TestCase
         $this->assertEquals('value', Env::get('INLINE_COMMENT_SINGLE_QUOTED'));
         $this->assertEquals('value', Env::get('INLINE_COMMENT_DOUBLE_QUOTED'));
         $this->assertEquals('test#notcomment', Env::get('ANOTHER_VALUE'));
+        $this->assertEquals('value', Env::get('INLINE_COMMENT_WITH_ALIGN_COMMENT'));
+        $this->assertEquals('value ', Env::get('INLINE_COMMENT_SINGLE_QUOTED_WITH_ALIGN_COMMENT'));
+        $this->assertEquals('value  	  ', Env::get('INLINE_COMMENT_DOUBLE_QUOTED_WITH_ALIGN_COMMENT'));
+    }
+
+    public function testRtrimAndImprovedQuoteHandling(): void
+    {
+        Env::load($this->testEnvPath);
+
+        // Test rtrim fix for trailing spaces before inline comments
+        $this->assertEquals('value', Env::get('RTRIM_TEST'));
+
+        // Test improved quote handling for quotes on same line
+        $this->assertEquals('value', Env::get('QUOTE_ON_SAME_LINE'));
+        $this->assertEquals('val"ue', Env::get('QUOTE_WITH_INNER'));
+        $this->assertEquals("val'ue", Env::get('MIXED_QUOTE_CASE'));
     }
 
     /**
