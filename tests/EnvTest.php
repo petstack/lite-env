@@ -26,6 +26,8 @@ class EnvTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Env::$disableDefaultPaths = true;
         $this->testEnvPath = __DIR__ . '/fixture/test.env';
 
         // Clear environment variables that might be set from previous tests
@@ -473,11 +475,7 @@ class EnvTest extends TestCase
      */
     public function testLoadMultiple(): void
     {
-        Env::loadMultiple($this->testEnvPath);
-        $this->assertEquals('myapp_db', Env::get('DATABASE_NAME'));
-
-        // Test with array argument
-        Env::loadMultiple([$this->testEnvPath]);
+        Env::load($this->testEnvPath, $this->testEnvPath, $this->testEnvPath);
         $this->assertEquals('myapp_db', Env::get('DATABASE_NAME'));
     }
 
@@ -558,5 +556,71 @@ class EnvTest extends TestCase
     {
         $this->expectException(RuntimeException::class);
         Env::load('non_existent_file.env');
+    }
+
+    public function testDefaultPaths(): void
+    {
+        // Reset to use default paths
+        Env::$disableDefaultPaths = false;
+
+        // Create .env and .env.local files for testing
+        $envFile = __DIR__ . '/../.env';
+        $envLocalFile = __DIR__ . '/../.env.local';
+
+        file_put_contents($envFile, "TEST_DEFAULT=from_env\nSHARED=env_value\n");
+        file_put_contents($envLocalFile, "TEST_LOCAL=from_local\nSHARED=local_value\n");
+
+        try {
+            Env::load();
+
+            $this->assertEquals('from_env', Env::get('TEST_DEFAULT'));
+            $this->assertEquals('from_local', Env::get('TEST_LOCAL'));
+            // .env.local should override .env
+            $this->assertEquals('local_value', Env::get('SHARED'));
+        } finally {
+            // Clean up test files
+            if (file_exists($envFile)) {
+                unlink($envFile);
+            }
+            if (file_exists($envLocalFile)) {
+                unlink($envLocalFile);
+            }
+            // Reset for other tests
+            Env::$disableDefaultPaths = true;
+        }
+    }
+
+    public function testDisableDefaultPaths(): void
+    {
+        // Test that when $disableDefaultPaths is true, only provided paths are loaded
+        Env::$disableDefaultPaths = true;
+
+        $customFile = __DIR__ . '/fixture/custom.env';
+        file_put_contents($customFile, "CUSTOM_ONLY=custom_value\n");
+
+        try {
+            Env::load($customFile);
+            $this->assertEquals('custom_value', Env::get('CUSTOM_ONLY'));
+        } finally {
+            if (file_exists($customFile)) {
+                unlink($customFile);
+            }
+        }
+    }
+
+    public function testUnreadableFile(): void
+    {
+        $unreadableFile = __DIR__ . '/fixture/unreadable.env';
+        file_put_contents($unreadableFile, "TEST=value\n");
+        chmod($unreadableFile, 0000); // Make file unreadable
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('exists but cannot be read');
+            Env::load($unreadableFile);
+        } finally {
+            chmod($unreadableFile, 0644); // Restore permissions
+            unlink($unreadableFile);
+        }
     }
 }

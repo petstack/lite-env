@@ -6,52 +6,85 @@ namespace PetStack\LiteEnv;
 
 use RuntimeException;
 
-class Env
+final class Env
 {
-    private const ENV_DEFAULT_PATH = '.env';
-    private const VALID_KEY_PATTERN = '/^[A-Z_][A-Z0-9_]*$/';
-    private const VARIABLE_PATTERN_COMBINED = '/(?:\$\{(?>[A-Z_][A-Z0-9_]*)\})|(?:(?<!\\\\)\$(?>([A-Z_][A-Z0-9_]*)))/';
+    private const array ENV_DEFAULT_PATHS = ['.env', '.env.local'];
+
+    private const string VALID_KEY_PATTERN = '/^[A-Z_][A-Z0-9_]*$/';
+    private const string VARIABLE_PATTERN_COMBINED = '/(?:\$\{(?>[A-Z_][A-Z0-9_]*)\})|(?:(?<!\\\\)\$(?>([A-Z_][A-Z0-9_]*)))/';
 
     private static array $cacheKeys = [];
 
     /**
-     * Loads environment variables from multiple .env files.
+     * Controls whether default .env files are loaded automatically.
      *
-     * This method accepts multiple file paths or arrays of file paths and loads
-     * environment variables from each file by calling the load() method.
+     * When set to false (default), the load() method will automatically load
+     * .env and .env.local files from the current directory if they exist.
+     * When set to true, only explicitly specified files are loaded.
      *
-     * @param string|string[] ...$paths One or more file paths or arrays of file paths to .env files
-     * @return void
+     * @var bool
      */
-    public static function loadMultiple(...$paths): void
+    public static bool $disableDefaultPaths = false;
+
+    /**
+     * Private constructor to prevent direct instantiation.
+     *
+     * The Env class is designed to work with static methods only.
+     * This constructor ensures the class follows a static-only pattern.
+     */
+    private function __construct()
     {
-        foreach ($paths as $path) {
-            if (\is_array($path)) {
-                self::loadMultiple(...$path);
-            } else {
-                self::load($path);
+    }
+
+    /**
+     * Loads environment variables from .env files.
+     *
+     * By default, this method loads .env and .env.local files from the current
+     * directory (if they exist), followed by any explicitly specified files.
+     * The loading order ensures that later files can override earlier ones.
+     *
+     * @param string ...$paths Zero or more paths to additional .env files to load
+     * @return void
+     * @throws RuntimeException If a specified file doesn't exist or cannot be read
+     */
+    public static function load(string ...$paths): void
+    {
+        $env = new Env();
+
+        foreach (self::$disableDefaultPaths ? $paths : [...self::ENV_DEFAULT_PATHS, ...$paths] as $file) {
+            if (\in_array($file, self::ENV_DEFAULT_PATHS, true) && !\is_file($file)) {
+                continue;
+            }
+
+            if (!\is_file($file)) {
+                throw new RuntimeException('The file "' . $file . '" does not exist');
+            }
+            if (!\is_readable($file)) {
+                throw new RuntimeException('The file "' . $file . '" exists but cannot be read');
+            }
+
+            foreach ($env->parseFile($file) as $key => $value) {
+                $env->setEnvironmentVariable($key, $value);
             }
         }
     }
 
     /**
-     * Loads environment variables from a .env file.
+     * Parses a .env file and yields key-value pairs.
      *
-     * This method reads a .env file line by line, processes each line to extract
-     * key-value pairs, and sets them as environment variables. It handles quoted values,
-     * multiline values, and variable interpolation.
+     * This method reads a .env file line by line and parses each line to extract
+     * environment variable key-value pairs. It handles multiline values, quoted
+     * strings, comments, and variable interpolation.
      *
-     * @param string $path Path to the .env file (defaults to '.env')
-     * @return void
-     * @throws RuntimeException If the file doesn't exist, can't be read, or can't be opened
+     * @param string $file The path to the .env file to parse
+     * @return \Generator<string, string> Yields key-value pairs of environment variables
+     * @throws RuntimeException If the file cannot be opened
      */
-    public static function load(string $path = self::ENV_DEFAULT_PATH): void
+    private function parseFile(string $file): \Generator
     {
-        self::validateFile($path);
-
-        $file = \fopen($path, 'r');
-        if ($file === false) {
-            throw new RuntimeException(\sprintf('Failed to open file "%s"', $path));
+        $stream = \fopen($file, 'r');
+        if ($stream === false) {
+            throw new RuntimeException('Failed to open file "' . $file . '"');
         }
 
         $inQuotes = false;
@@ -59,7 +92,7 @@ class Env
         $value = '';
         $key = '';
 
-        while (($line = \fgets($file)) !== false) {
+        while (($line = \fgets($stream)) !== false) {
             $line = \str_replace(["\r\n", "\r"], "\n", $line);
 
             try {
@@ -69,10 +102,10 @@ class Env
                     'value' => $value,
                     'key' => $key,
                     'shouldSetVariable' => $shouldSetVariable,
-                ] = self::processLine($line, $inQuotes, $quoteChar, $value, $key);
+                ] = $this->processLine($line, $inQuotes, $quoteChar, $value, $key);
             } catch (RuntimeException $e) {
                 \trigger_error(
-                    sprintf("Syntax error in line \"%s\": %s", $line, $e->getMessage()),
+                    'Syntax error in line "' . $line . "\": " . $e->getMessage(),
                     \E_USER_WARNING
                 );
 
@@ -80,31 +113,11 @@ class Env
             }
 
             if ($shouldSetVariable) {
-                self::setEnvironmentVariable($key, $value);
+                yield $key => $value;
             }
         }
 
-        \fclose($file);
-    }
-
-    /**
-     * Validates that a file exists and is readable.
-     *
-     * This method checks if the specified file exists and is readable before
-     * attempting to load environment variables from it.
-     *
-     * @param string $path Path to the file to validate
-     * @return void
-     * @throws RuntimeException If the file doesn't exist or can't be read
-     */
-    private static function validateFile(string $path): void
-    {
-        if (!\is_file($path)) {
-            throw new RuntimeException(\sprintf('The file "%s" does not exist', $path));
-        }
-        if (!\is_readable($path)) {
-            throw new RuntimeException(\sprintf('The file "%s" exists but cannot be read', $path));
-        }
+        \fclose($stream);
     }
 
     /**
@@ -122,15 +135,15 @@ class Env
      * @return array{inQuotes: bool, quoteChar: string, value: string, key: string, shouldSetVariable: bool} Processing state and results
      * @throws RuntimeException If the line has invalid format
      */
-    private static function processLine(
+    private function processLine(
         string $line,
         bool $inQuotes,
         string $quoteChar,
         string $value,
-        string $key
+        string $key,
     ): array {
         if ($inQuotes) {
-            return self::handleQuotedValue($line, $quoteChar, $value, $key);
+            return $this->handleQuotedValue($line, $quoteChar, $value, $key);
         }
 
         $firstChar = \ltrim($line)[0] ?? null;
@@ -146,16 +159,13 @@ class Env
 
         $equals = \strpos($line, '=');
         if ($equals === false) {
-            throw new RuntimeException(\sprintf("Invalid line: %s. Missing equals sign in line.", $line));
+            throw new RuntimeException('Invalid line: ' . $line . ". Missing equals sign in line.");
         }
 
         $key = \trim(\substr($line, 0, $equals));
         if (!self::isValidKey($key)) {
             throw new RuntimeException(
-                \sprintf(
-                    'Invalid key format: "%s". Keys must start with a letter or underscore and can only contain letters, numbers, and underscores.',
-                    $key
-                )
+                'Invalid key format: "' . $key . '". Keys must start with a letter or underscore and can only contain letters, numbers, and underscores.'
             );
         }
 
@@ -175,11 +185,10 @@ class Env
             $lastChar = $value[\strlen($value) - 1];
 
             if ($lastChar === $quoteChar) {
-                $value = \substr($value, 1, -1);
                 return [
                     'inQuotes' => false,
                     'quoteChar' => '',
-                    'value' => $value,
+                    'value' => \substr($value, 1, -1),
                     'key' => $key,
                     'shouldSetVariable' => true,
                 ];
@@ -188,12 +197,10 @@ class Env
             $value = \substr($line, $equals + 2);
 
             if (\str_contains($value, $quoteChar)) {
-                $value = \substr($value, 0, \strpos(\substr($line, $equals + 2), $quoteChar));
-
                 return [
                     'inQuotes' => false,
                     'quoteChar' => '',
-                    'value' => $value,
+                    'value' => \substr($value, 0, \strpos(\substr($line, $equals + 2), $quoteChar)),
                     'key' => $key,
                     'shouldSetVariable' => true,
                 ];
@@ -202,7 +209,7 @@ class Env
             return [
                 'inQuotes' => true,
                 'quoteChar' => $quoteChar,
-                'value' => $value,
+                'value' => \substr($line, $equals + 2),
                 'key' => $key,
                 'shouldSetVariable' => false,
             ];
@@ -234,25 +241,23 @@ class Env
      * @param string $key The environment variable key
      * @return array{inQuotes: bool, quoteChar: string, value: string, key: string, shouldSetVariable: bool} Updated processing state
      */
-    private static function handleQuotedValue(string $line, string $quoteChar, string $value, string $key): array
+    private function handleQuotedValue(string $line, string $quoteChar, string $value, string $key): array
     {
         $rTrimLine = \rtrim($line);
         if (($rTrimLine[\strlen($rTrimLine) - 1] ?? null) !== $quoteChar) {
-            $value .= $line;
             return [
                 'inQuotes' => true,
                 'quoteChar' => $quoteChar,
-                'value' => $value,
+                'value' => $value . $line,
                 'key' => $key,
                 'shouldSetVariable' => false,
             ];
         }
 
-        $value .= \substr($rTrimLine, 0, -1);
         return [
             'inQuotes' => false,
             'quoteChar' => '',
-            'value' => $value,
+            'value' => $value . \substr($rTrimLine, 0, -1),
             'key' => $key,
             'shouldSetVariable' => true,
         ];
@@ -269,10 +274,10 @@ class Env
      * @param string $value The environment variable value (before processing)
      * @return void
      */
-    private static function setEnvironmentVariable(string $key, string $value): void
+    private function setEnvironmentVariable(string $key, string $value): void
     {
         self::$cacheKeys[$key] = true;
-        $value = self::expandVariables($value);
+        $value = $this->expandVariables($value);
         $value = self::convertType($value);
         \putenv("{$key}={$value}");
         $_ENV[$key] = $value;
@@ -280,89 +285,16 @@ class Env
     }
 
     /**
-     * Retrieves the value of an environment variable.
+     * Expands variable references within a value string.
      *
-     * This method gets the value of an environment variable from the environment.
-     * It checks various sources (getenv, $_ENV, $_SERVER) and returns the value
-     * with the appropriate type conversion. If the variable doesn't exist,
-     * it returns the provided default value.
+     * This method processes variable interpolation by replacing references
+     * like ${VAR_NAME} or $VAR_NAME with their actual values from the environment.
+     * It handles escaped dollar signs (\$) by preserving them as literal characters.
      *
-     * @param string $key The environment variable name to retrieve
-     * @param mixed $default The default value to return if the variable doesn't exist
-     * @return mixed The value of the environment variable or the default value
-     * @throws RuntimeException If the key format is invalid
+     * @param string $value The value string that may contain variable references
+     * @return string The value with all variable references expanded
      */
-    public static function get(string $key, mixed $default = null): mixed
-    {
-        if (!self::isValidKey($key)) {
-            throw new RuntimeException(
-                \sprintf(
-                    'Invalid key format: "%s". Keys must start with a letter or underscore and can only contain letters, numbers, and underscores.',
-                    $key
-                )
-            );
-        }
-
-        // If not in cache, try to get from environment
-        $value = \getenv($key);
-
-        // If not found in getenv, try $_ENV and $_SERVER
-        if ($value === false) {
-            if (isset($_ENV[$key])) {
-                $value = $_ENV[$key];
-            } elseif (isset($_SERVER[$key])) {
-                $value = $_SERVER[$key];
-            } else {
-                return $default;
-            }
-        }
-
-        if (\is_string($value)) {
-            return self::convertType($value);
-        }
-
-        return $value;
-    }
-
-    /**
-     * Returns all environment variable keys that have been loaded.
-     *
-     * This method returns an array of all environment variable keys that
-     * have been loaded or set during the current execution.
-     *
-     * @return array<int, string> Array of environment variable keys
-     */
-    public static function getAllKeys(): array
-    {
-        return \array_keys(self::$cacheKeys);
-    }
-
-    /**
-     * Validates if a string is a valid environment variable key.
-     *
-     * This method checks if a string conforms to the standard format for
-     * environment variable keys: must start with a letter or underscore
-     * and can only contain uppercase letters, numbers, and underscores.
-     *
-     * @param string $key The key to validate
-     * @return bool True if the key is valid, false otherwise
-     */
-    private static function isValidKey(string $key): bool
-    {
-        return \preg_match(self::VALID_KEY_PATTERN, $key) === 1;
-    }
-
-    /**
-     * Expands environment variable references within a string.
-     *
-     * This method replaces references to environment variables in the format
-     * $VAR or ${VAR} with their actual values. It handles escaped dollar signs
-     * and preserves them in the output.
-     *
-     * @param string $value The string containing potential variable references
-     * @return string The string with all variable references expanded
-     */
-    private static function expandVariables(string $value): string
+    private function expandVariables(string $value): string
     {
         // Handle escaped dollar signs first
         $value = \str_replace('\\$', '___ESCAPED_DOLLAR___', $value);
@@ -390,18 +322,102 @@ class Env
     }
 
     /**
-     * Converts a string value to an appropriate PHP type.
+     * Checks if an environment variable exists.
      *
-     * This method converts string values to their appropriate PHP types based on content:
-     * - "true" or "(true)" to boolean true
-     * - "false" or "(false)" to boolean false
-     * - "null" or "(null)" to null
-     * - "empty", "(empty)", "", or '' to empty string
-     * - Numeric strings to int or float
-     * - All other strings remain as strings
+     * This method checks for the existence of an environment variable in multiple
+     * locations: the internal cache, PHP's getenv(), $_ENV, and $_SERVER superglobals.
+     *
+     * @param string $key The environment variable name to check
+     * @return bool True if the variable exists, false otherwise
+     */
+    public static function has(string $key): bool
+    {
+        return isset(self::$cacheKeys[$key])
+            || \getenv($key) !== false
+            || isset($_ENV[$key])
+            || isset($_SERVER[$key]);
+    }
+
+    /**
+     * Retrieves an environment variable value.
+     *
+     * This method attempts to retrieve an environment variable from multiple sources
+     * in the following order: getenv(), $_ENV, $_SERVER. If the variable is found
+     * as a string, it's automatically converted to the appropriate PHP type.
+     *
+     * @param string $key The environment variable name
+     * @param string|int|float|bool|null $default The default value to return if variable doesn't exist
+     * @return string|int|float|bool|null The environment variable value or default
+     * @throws RuntimeException If the key format is invalid
+     */
+    public static function get(string $key, string|int|float|bool|null $default = null): string|int|float|bool|null
+    {
+        if (!self::isValidKey($key)) {
+            throw new RuntimeException('Invalid key format: "' . $key . '". Keys must start with a letter or underscore and can only contain letters, numbers, and underscores.');
+        }
+
+        // Try to get from environment
+        $value = \getenv($key);
+
+        // If not found in getenv, try $_ENV and $_SERVER
+        if ($value === false) {
+            $value = match (true) {
+                isset($_ENV[$key]) => $_ENV[$key],
+                isset($_SERVER[$key]) => $_SERVER[$key],
+                default => $default,
+            };
+        }
+
+        if (\is_string($value)) {
+            return self::convertType($value);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Returns all environment variable keys that were loaded from files.
+     *
+     * This method returns an array of all environment variable names that
+     * were successfully loaded and cached by this library. Note that this
+     * only includes variables loaded through this class, not all environment variables.
+     *
+     * @return array<string> Array of environment variable names
+     */
+    public static function getAllKeys(): array
+    {
+        return \array_keys(self::$cacheKeys);
+    }
+
+    /**
+     * Validates an environment variable key format.
+     *
+     * Environment variable keys must follow specific naming conventions:
+     * - Must start with a letter (A-Z) or underscore (_)
+     * - Can contain only uppercase letters, numbers, and underscores
+     * - Must not be empty
+     *
+     * @param string $key The environment variable key to validate
+     * @return bool True if the key format is valid, false otherwise
+     */
+    private static function isValidKey(string $key): bool
+    {
+        return \preg_match(self::VALID_KEY_PATTERN, $key) === 1;
+    }
+
+    /**
+     * Converts a string value to its appropriate PHP type.
+     *
+     * This method performs automatic type conversion for common value patterns:
+     * - 'true', '(true)' become boolean true
+     * - 'false', '(false)' become boolean false
+     * - 'null', '(null)' become null
+     * - 'empty', '(empty)', '""', "''" become empty string
+     * - Numeric strings become integers or floats
+     * - All other values remain as strings
      *
      * @param string $value The string value to convert
-     * @return mixed The converted value with the appropriate PHP type
+     * @return mixed The value converted to its appropriate PHP type
      */
     private static function convertType(string $value): mixed
     {
@@ -414,22 +430,5 @@ class Env
                 ? (\str_contains($value, '.') ? (float) $value : (int) $value)
                 : $value,
         };
-    }
-
-    /**
-     * Checks if an environment variable exists.
-     *
-     * This method checks if an environment variable exists by looking in
-     * the internal cache and various environment sources (getenv, $_ENV, $_SERVER).
-     *
-     * @param string $key The environment variable name to check
-     * @return bool True if the environment variable exists, false otherwise
-     */
-    public static function has(string $key): bool
-    {
-        return isset(self::$cacheKeys[$key])
-            || \getenv($key) !== false
-            || isset($_ENV[$key])
-            || isset($_SERVER[$key]);
     }
 }
