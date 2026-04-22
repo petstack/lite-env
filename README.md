@@ -17,7 +17,7 @@ Lite Env is a simple library for loading environment variables from .env files i
 - Type conversion (strings, integers, floats, booleans, null)
 - Multiline values
 - Quoted values (both single and double quotes)
-- Inline comments support with proper whitespace handling
+- Inline comments support with proper whitespace handling (space or tab before `#`)
 - **Multiple file loading** with single method call
 - Comprehensive error handling and validation
 
@@ -53,6 +53,7 @@ Env::load('/path/to/custom.env'); // Only loads custom.env
 $dbName = Env::get('DATABASE_NAME');
 
 // Get with a default value if the variable doesn't exist
+// (also returned when the requested key has an invalid format)
 $port = Env::get('PORT', 3000);
 
 // Check if a variable exists
@@ -95,9 +96,9 @@ BASE_PATH=/var/www/app
 LOG_PATH=${BASE_PATH}/logs
 CACHE_PATH=$BASE_PATH/cache
 
-# Values with inline comments (v2.0 improvement)
+# Values with inline comments (space or tab before `#`)
 API_URL=https://api.example.com   # Production API endpoint
-TIMEOUT=30                        # Connection timeout in seconds
+TIMEOUT=30	# Connection timeout in seconds
 
 # Multiline value
 MULTILINE_VALUE="line1
@@ -119,6 +120,14 @@ Lite Env automatically converts values to appropriate PHP types:
 - `empty`, `(empty)`, `""`, `''` → `''` (empty string)
 - Numeric values → integers or floats
 
+## What's new in v2.1
+
+- **`Env::get()` no longer throws** on an invalid key format — it returns the provided default value instead. This makes `get()` safe to call with arbitrary input.
+- **Inline comments** can now be separated from the value by a tab (`\t#`), not only by a space (` #`).
+- **EOF handling** — the last `KEY=VALUE` pair is now emitted correctly even if the file does not end with a newline.
+- **Multiline quoted values** are now assembled correctly across lines.
+- **`putenv()`** now receives the raw string value; the type-converted value is still available via `Env::get()`, `$_ENV` and `$_SERVER`.
+
 ## Version 2.0 Breaking Changes
 
 If you're upgrading from v1.x, please note these breaking changes:
@@ -138,7 +147,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed migration guide.
 
 ## Requirements
 
-- PHP 8.0 or higher
+- PHP 8.3 or higher
 
 ## License
 
