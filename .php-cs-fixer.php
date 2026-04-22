@@ -27,5 +27,24 @@ $config = new PhpCsFixer\Config();
 return $config
     ->setRules([
         '@PSR12' => true,
+        '@PHP83Migration' => true,
+        '@PhpCsFixer:risky' => true,
+        'declare_strict_types' => true,
+        'native_function_invocation' => [
+            'include' => ['@all'],
+            'scope' => 'all',
+            'strict' => true,
+        ],
+        'native_constant_invocation' => [
+            'fix_built_in' => true,
+            'exclude' => ['null', 'true', 'false'],
+            'scope' => 'all',
+            'strict' => true,
+        ],
+        'no_unused_imports' => true,
+        'ordered_imports' => true,
+        'binary_operator_spaces' => [
+            'default' => 'single_space',
+        ],
     ])
     ->setFinder($finder);

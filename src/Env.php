@@ -49,7 +49,7 @@ final class Env
      */
     public static function load(string ...$paths): void
     {
-        $env = new Env();
+        $env = new self();
 
         foreach (self::$disableDefaultPaths ? $paths : [...self::ENV_DEFAULT_PATHS, ...$paths] as $file) {
             if (\in_array($file, self::ENV_DEFAULT_PATHS, true) && !\is_file($file)) {
@@ -115,6 +115,10 @@ final class Env
             if ($shouldSetVariable) {
                 yield $key => $value;
             }
+        }
+
+        if ($key) {
+            yield $key => $value;
         }
 
         \fclose($stream);
@@ -200,7 +204,7 @@ final class Env
                 return [
                     'inQuotes' => false,
                     'quoteChar' => '',
-                    'value' => \substr($value, 0, \strpos(\substr($line, $equals + 2), $quoteChar)),
+                    'value' => \substr($value, 0, \strpos($value, $quoteChar)),
                     'key' => $key,
                     'shouldSetVariable' => true,
                 ];
@@ -209,14 +213,16 @@ final class Env
             return [
                 'inQuotes' => true,
                 'quoteChar' => $quoteChar,
-                'value' => \substr($line, $equals + 2),
+                'value' => $value,
                 'key' => $key,
                 'shouldSetVariable' => false,
             ];
         }
 
-        if (\str_contains($value, ' #')) {
-            $value = \rtrim(\substr($value, 0, \strpos($value, ' #')));
+        foreach ([' #', "\t#"] as $needle) {
+            if (\str_contains($value, $needle)) {
+                $value = \rtrim(\substr($value, 0, \strpos($value, $needle)));
+            }
         }
 
         return [
@@ -278,8 +284,10 @@ final class Env
     {
         self::$cacheKeys[$key] = true;
         $value = $this->expandVariables($value);
-        $value = self::convertType($value);
+
         \putenv("{$key}={$value}");
+
+        $value = self::convertType($value);
         $_ENV[$key] = $value;
         $_SERVER[$key] = $value;
     }
@@ -296,6 +304,10 @@ final class Env
      */
     private function expandVariables(string $value): string
     {
+        if (!\str_contains($value, '${') && !\str_contains($value, '$')) {
+            return $value;
+        }
+
         // Handle escaped dollar signs first
         $value = \str_replace('\\$', '___ESCAPED_DOLLAR___', $value);
 
@@ -348,12 +360,11 @@ final class Env
      * @param string $key The environment variable name
      * @param string|int|float|bool|null $default The default value to return if variable doesn't exist
      * @return string|int|float|bool|null The environment variable value or default
-     * @throws RuntimeException If the key format is invalid
      */
     public static function get(string $key, string|int|float|bool|null $default = null): string|int|float|bool|null
     {
         if (!self::isValidKey($key)) {
-            throw new RuntimeException('Invalid key format: "' . $key . '". Keys must start with a letter or underscore and can only contain letters, numbers, and underscores.');
+            return $default;
         }
 
         // Try to get from environment
