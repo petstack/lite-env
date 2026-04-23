@@ -324,7 +324,14 @@ final class Env
                     $varName = $matches[1] ?? '';
                 }
 
-                return self::get($varName);
+                $varValue = self::get($varName, '');
+
+                return match (true) {
+                    $varValue === null => 'null',
+                    $varValue === true => 'true',
+                    $varValue === false => 'false',
+                    default => (string) $varValue,
+                };
             },
             $value
         );

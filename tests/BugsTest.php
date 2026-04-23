@@ -191,4 +191,57 @@ class BugsTest extends TestCase
     {
         self::assertSame('fallback', Env::get('bad-key', 'fallback'));
     }
+
+    /**
+     * Bug #7a: interpolating a missing variable must not crash loading.
+     *
+     * expandVariables() returns Env::get() directly from a callback that is
+     * declared to return string. When the referenced variable is missing,
+     * get() returns null and load() aborts with TypeError.
+     */
+    public function testInterpolationOfMissingVariableMustNotThrowTypeError(): void
+    {
+        $path = $this->writeFixture('bug_missing_interpolation.env', "BROKEN=\$MISSING/path\n");
+        try {
+            try {
+                Env::load($path);
+            } catch (\TypeError $e) {
+                self::fail(
+                    'Interpolation with a missing variable must not throw TypeError: ' . $e->getMessage()
+                );
+            }
+
+            self::assertTrue(
+                Env::has('BROKEN'),
+                'BROKEN must still be loaded when interpolation references a missing variable'
+            );
+        } finally {
+            $this->removeFixture($path);
+        }
+    }
+
+    /**
+     * Bug #7b: interpolating an already-typed variable must not crash loading.
+     *
+     * If the referenced variable was converted to int/bool/null, get()
+     * returns a non-string value and the interpolation callback violates its
+     * string return type.
+     */
+    public function testInterpolationOfTypedVariableMustNotThrowTypeError(): void
+    {
+        $path = $this->writeFixture('bug_typed_interpolation.env', "A=1\nB=\$A\n");
+        try {
+            try {
+                Env::load($path);
+            } catch (\TypeError $e) {
+                self::fail(
+                    'Interpolation with a typed variable must not throw TypeError: ' . $e->getMessage()
+                );
+            }
+
+            self::assertSame(1, Env::get('B'));
+        } finally {
+            $this->removeFixture($path);
+        }
+    }
 }
