@@ -3,7 +3,7 @@
     "description": "Minimal and lightweight .env parser for PHP with no dependencies.",
     "type": "library",
     "license": "MIT",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "autoload": {
         "psr-4": {
             "PetStack\\LiteEnv\\": "src/"
