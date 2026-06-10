@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-06-11
+
+### Fixed
+- `KEY=0` no longer collapses into an empty string (`empty()` was used to detect empty values, and `empty('0')` is true)
+- The last variable in a file is no longer parsed and interpolated twice when the file ends normally
+- Integer conversion no longer strips leading zeros (`01234` stays a string) and no longer overflows past `PHP_INT_MAX` with a PHP warning; only canonical integers validated by `FILTER_VALIDATE_INT` are converted
+- Float conversion no longer loses precision (`1.10` stays a string); values are converted only when the cast round-trips back to the original string
+- Whitespace between `=` and the opening quote no longer breaks multiline values
+- A lone opening quote at the end of a line now starts a multiline value instead of producing an empty one
+- An inline comment after the closing quote of a multiline value no longer swallows the rest of the file
+- Values containing the literal string `___ESCAPED_DOLLAR___` are no longer corrupted: the internal interpolation placeholder was removed and escaped dollar signs (`\$`) are handled by the interpolation pattern itself
+- Explicitly passed paths named `.env` or `.env.local` now throw `RuntimeException` when missing instead of being silently skipped
+
+### Changed
+- Single-quoted values are treated as literals and are no longer interpolated, following dotenv convention
+- Multiline quoted values now close at the first closing quote on a line; trailing content after it (e.g. an inline comment) is ignored
+- Numeric type conversion only applies to canonical representations; non-canonical numeric strings (e.g. `01234`, `1.10`, `.5`, out-of-range integers) are kept as strings
+
+### Technical Improvements
+- Added regression test suite `tests/BugsV2Test.php` covering all of the above fixes
+
 ## [2.1.1] - 2026-04-24
 
 ### Added

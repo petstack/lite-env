@@ -9,11 +9,10 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 /**
- * Tests that reproduce bugs found after the v2.1.1 fixes.
+ * Regression tests for the parser and type-conversion bugs fixed in v2.2.0.
  *
- * These tests are EXPECTED TO FAIL against the current implementation.
- * Each test encodes the correct behavior; when a bug is fixed the
- * corresponding test should turn green.
+ * Each test was written against the buggy v2.1.1 implementation and encodes
+ * the correct behavior; the docblocks describe the original root causes.
  */
 class BugsV2Test extends TestCase
 {
@@ -53,12 +52,12 @@ class BugsV2Test extends TestCase
     }
 
     /**
-     * Bug #1: `KEY=0` must not become an empty string.
+     * Bug #1 (fixed): `KEY=0` became an empty string.
      *
-     * Root cause: processLine() checks `empty($value)` to detect empty
-     * values, but empty('0') is true in PHP, so the value '0' is replaced
-     * with ''. With type conversion enabled the expected result is int 0
-     * (consistent with PORT=3000 becoming int 3000).
+     * Root cause: processLine() used `empty($value)` to detect empty values,
+     * but empty('0') is true in PHP, so the value '0' was replaced with ''.
+     * With type conversion enabled the correct result is int 0 (consistent
+     * with PORT=3000 becoming int 3000).
      */
     public function testZeroValueMustNotBecomeEmptyString(): void
     {
@@ -72,15 +71,15 @@ class BugsV2Test extends TestCase
     }
 
     /**
-     * Bug #2: the last variable in a file is processed twice.
+     * Bug #2 (fixed): the last variable in a file was processed twice.
      *
      * parseFile() yields the accumulated pair after the read loop to avoid
-     * dropping an unterminated quoted value at EOF, but $key is never reset
-     * after a successful yield inside the loop. The raw value of the last
-     * variable is therefore expanded a second time, after the variable
-     * itself has already been set. A self-reference makes this observable:
-     * `B=$B!` must produce '!' ($B is undefined on the only legitimate
-     * expansion pass), not '!!'.
+     * dropping an unterminated quoted value at EOF, but $key was not reset
+     * after a successful yield inside the loop, so the raw value of the last
+     * variable was expanded a second time after the variable itself had
+     * already been set. A self-reference makes this observable: `B=$B!`
+     * must produce '!' ($B is undefined on the only legitimate expansion
+     * pass), not '!!'.
      */
     public function testLastVariableMustNotBeYieldedTwice(): void
     {
@@ -94,12 +93,12 @@ class BugsV2Test extends TestCase
     }
 
     /**
-     * Bug #3a: leading zeros must not be stripped by numeric conversion.
+     * Bug #3a (fixed): leading zeros were stripped by numeric conversion.
      *
-     * is_numeric('01234') is true, so convertType() casts the value to
-     * int 1234. Zip codes, phone numbers and numeric IDs with leading
-     * zeros are silently corrupted. Only canonical numeric representations
-     * should be converted; '01234' is not one.
+     * is_numeric('01234') is true, so convertType() cast the value to
+     * int 1234, silently corrupting zip codes, phone numbers and numeric
+     * IDs with leading zeros. Integer conversion now only applies to
+     * canonical values validated by FILTER_VALIDATE_INT.
      */
     public function testLeadingZerosMustBePreserved(): void
     {
@@ -113,11 +112,11 @@ class BugsV2Test extends TestCase
     }
 
     /**
-     * Bug #3b: version-like values must not lose precision.
+     * Bug #3b (fixed): version-like values lost precision.
      *
-     * '1.10' is cast to float 1.1, so the original text can no longer be
-     * recovered ((string) 1.1 === '1.1'). A float cast is only safe when
-     * it round-trips back to the original string.
+     * '1.10' was cast to float 1.1, so the original text could no longer be
+     * recovered ((string) 1.1 === '1.1'). Float conversion now only applies
+     * when the cast survives a round trip back to the original string.
      */
     public function testVersionLikeValueMustNotLosePrecision(): void
     {
@@ -131,11 +130,11 @@ class BugsV2Test extends TestCase
     }
 
     /**
-     * Bug #3c: numeric strings beyond PHP_INT_MAX must not overflow.
+     * Bug #3c (fixed): numeric strings beyond PHP_INT_MAX overflowed.
      *
-     * convertType() casts any dot-free numeric string to int. A 23-digit
-     * ID emits "not representable as an int" warnings and silently becomes
-     * PHP_INT_MAX.
+     * convertType() cast any dot-free numeric string to int, so a 23-digit
+     * ID emitted "not representable as an int" warnings and silently became
+     * PHP_INT_MAX. Such values are now kept as strings.
      */
     public function testHugeNumericValueMustNotOverflow(): void
     {
@@ -149,14 +148,15 @@ class BugsV2Test extends TestCase
     }
 
     /**
-     * Bug #4a: whitespace between `=` and the opening quote breaks
+     * Bug #4a (fixed): whitespace between `=` and the opening quote broke
      * multiline values.
      *
-     * processLine() trims the value to detect the opening quote, but then
-     * re-slices the raw line with `substr($line, $equals + 2)`, assuming
-     * the quote sits immediately after `=`. With `K= "line1` the slice
-     * starts at the quote itself, the quote is mistaken for the closing
-     * one, and the value collapses to ''.
+     * processLine() trimmed the value to detect the opening quote, but then
+     * re-sliced the raw line with `substr($line, $equals + 2)`, assuming the
+     * quote sat immediately after `=`. With `K= "line1` the slice started at
+     * the quote itself, the quote was mistaken for the closing one, and the
+     * value collapsed to ''. The slice now starts after the actual position
+     * of the opening quote.
      */
     public function testWhitespaceBeforeOpeningQuoteMustNotBreakMultiline(): void
     {
@@ -170,13 +170,13 @@ class BugsV2Test extends TestCase
     }
 
     /**
-     * Bug #4b: an opening quote alone on the first line must start a
-     * multiline value, not produce an empty one.
+     * Bug #4b (fixed): an opening quote alone on the first line produced an
+     * empty value instead of starting a multiline one.
      *
-     * For `K="` the trimmed value is the single character '"'; its first
-     * and last characters are the same quote, so processLine() treats it
-     * as a complete quoted empty value. The remaining lines of the real
-     * value then fail to parse and are lost.
+     * For `K="` the trimmed value is the single character '"'; its first and
+     * last characters are the same quote, so processLine() treated it as a
+     * complete quoted empty value and the remaining lines of the real value
+     * were lost. The same-line-close branch now requires a length above 1.
      */
     public function testOpeningQuoteAloneMustStartMultilineValue(): void
     {
@@ -190,13 +190,14 @@ class BugsV2Test extends TestCase
     }
 
     /**
-     * Bug #5: an inline comment after the closing quote of a multiline
-     * value prevents the quote from ever closing.
+     * Bug #5 (fixed): an inline comment after the closing quote of a
+     * multiline value prevented the quote from ever closing.
      *
-     * handleQuotedValue() only closes the value when the quote is the last
-     * non-whitespace character of the line. With `b" # comment` the parser
-     * stays inQuotes and swallows the rest of the file, so following
-     * variables disappear.
+     * handleQuotedValue() only closed the value when the quote was the last
+     * non-whitespace character of the line, so with `b" # comment` the
+     * parser stayed inQuotes and swallowed the rest of the file. The value
+     * now closes at the first occurrence of the quote character, consistent
+     * with the single-line parsing path.
      */
     public function testCommentAfterClosingQuoteMustNotSwallowRestOfFile(): void
     {
@@ -217,12 +218,13 @@ class BugsV2Test extends TestCase
     }
 
     /**
-     * Bug #6: single-quoted values must not be interpolated.
+     * Bug #6 (fixed): single-quoted values were interpolated.
      *
-     * By dotenv convention single quotes mean a literal value. The quote
-     * type is discarded before setEnvironmentVariable() runs, so
-     * expandVariables() interpolates `'$HOME_X/y'` as if it were
-     * double-quoted.
+     * By dotenv convention single quotes mean a literal value, but the quote
+     * type was discarded before setEnvironmentVariable() ran, so
+     * `'$HOME_X/y'` was expanded as if it were double-quoted. The parser now
+     * passes a raw flag along with each value and interpolation is skipped
+     * for single-quoted ones.
      */
     public function testSingleQuotedValuesMustNotInterpolate(): void
     {
@@ -239,13 +241,15 @@ class BugsV2Test extends TestCase
     }
 
     /**
-     * Bug #7: the `___ESCAPED_DOLLAR___` placeholder still collides with
+     * Bug #7 (fixed): the `___ESCAPED_DOLLAR___` placeholder collided with
      * user data.
      *
-     * The early return in expandVariables() only protects values without
-     * any `$` character. A value containing both the literal placeholder
-     * and a variable reference goes through the replace cycle, and the
-     * placeholder text is rewritten to `$` on the way out.
+     * expandVariables() replaced `\$` with a magic placeholder string before
+     * interpolation and rewrote every occurrence back to `$` afterwards, so
+     * a value containing both the literal placeholder and a variable
+     * reference was corrupted. The placeholder was removed entirely; escaped
+     * dollar signs are now matched and unescaped by the interpolation regex
+     * itself.
      */
     public function testPlaceholderCollisionWithVariableReference(): void
     {
@@ -262,14 +266,14 @@ class BugsV2Test extends TestCase
     }
 
     /**
-     * Bug #8: an explicitly requested file must throw when missing, even
-     * if its name matches a default path.
+     * Bug #8 (fixed): an explicitly requested file whose name matched a
+     * default path was silently skipped when missing.
      *
-     * load() skips any missing file whose name appears in
-     * ENV_DEFAULT_PATHS, without checking whether it was passed explicitly.
-     * With default paths disabled, `Env::load('.env')` for a nonexistent
-     * file returns silently instead of throwing, contradicting both the
-     * docblock and the behavior for every other file name.
+     * load() skipped any missing file listed in ENV_DEFAULT_PATHS without
+     * checking whether it was passed explicitly, so with default paths
+     * disabled `Env::load('.env')` for a nonexistent file returned silently
+     * instead of throwing. Default paths are now tracked separately from
+     * explicit arguments, and only the former are optional.
      */
     public function testExplicitlyPassedDefaultPathMustThrowWhenMissing(): void
     {
