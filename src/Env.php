@@ -51,8 +51,16 @@ final class Env
     {
         $env = new self();
 
-        foreach (self::$disableDefaultPaths ? $paths : [...self::ENV_DEFAULT_PATHS, ...$paths] as $file) {
-            if (\in_array($file, self::ENV_DEFAULT_PATHS, true) && !\is_file($file)) {
+        $files = [];
+        foreach (self::$disableDefaultPaths ? [] : self::ENV_DEFAULT_PATHS as $file) {
+            $files[] = [$file, true];
+        }
+        foreach ($paths as $file) {
+            $files[] = [$file, false];
+        }
+
+        foreach ($files as [$file, $optional]) {
+            if ($optional && !\is_file($file)) {
                 continue;
             }
 
