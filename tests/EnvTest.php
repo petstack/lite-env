@@ -253,14 +253,12 @@ class EnvTest extends TestCase
             'ENABLE_CACHE should be 1, got: ' . \var_export($enableCache, true)
         );
 
-        // For SHOW_DEBUG, the actual value is an empty string
-        // This is likely due to how the Env class processes the value
+        // SHOW_DEBUG=0 is converted to int 0, like any other numeric value
         $showDebug = Env::get('SHOW_DEBUG');
-        self::assertIsString($showDebug, 'SHOW_DEBUG should be a string');
         self::assertSame(
-            '',
+            0,
             $showDebug,
-            'SHOW_DEBUG should be an empty string, got: ' . \var_export($showDebug, true)
+            'SHOW_DEBUG should be 0, got: ' . \var_export($showDebug, true)
         );
 
         // For SEND_EMAILS, we expect an integer 1

@@ -174,7 +174,7 @@ final class Env
         }
 
         $value = \trim(\substr($line, $equals + 1));
-        if (empty($value)) {
+        if ($value === '') {
             return [
                 'inQuotes' => false,
                 'quoteChar' => '',
