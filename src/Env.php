@@ -190,7 +190,7 @@ final class Env
             $quoteChar = $value[0];
             $lastChar = $value[\strlen($value) - 1];
 
-            if ($lastChar === $quoteChar) {
+            if ($lastChar === $quoteChar && \strlen($value) > 1) {
                 return [
                     'inQuotes' => false,
                     'quoteChar' => '',
