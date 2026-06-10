@@ -200,7 +200,7 @@ final class Env
                 ];
             }
 
-            $value = \substr($line, $equals + 2);
+            $value = \substr($line, \strpos($line, $quoteChar, $equals + 1) + 1);
 
             if (\str_contains($value, $quoteChar)) {
                 return [
