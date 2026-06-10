@@ -114,6 +114,8 @@ final class Env
 
             if ($shouldSetVariable) {
                 yield $key => $value;
+                $key = '';
+                $value = '';
             }
         }
 
