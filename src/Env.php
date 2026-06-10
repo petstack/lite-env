@@ -433,9 +433,11 @@ final class Env
      * - 'false', '(false)' become boolean false
      * - 'null', '(null)' become null
      * - 'empty', '(empty)', '""', "''" become empty string
-     * - Numeric strings become integers or floats; integer conversion only
-     *   applies to canonical values, so strings with leading zeros or values
-     *   beyond the integer range are kept as strings
+     * - Numeric strings become integers or floats; conversion only applies
+     *   to canonical values that survive a round trip back to the original
+     *   string, so values with leading zeros (e.g. '01234'), trailing zeros
+     *   after the decimal point (e.g. '1.10') or beyond the integer range
+     *   are kept as strings
      * - All other values remain as strings
      *
      * @param string $value The string value to convert
@@ -450,7 +452,7 @@ final class Env
             'empty', '(empty)', '""', "''" => '',
             default => match (true) {
                 !\is_numeric($value) => $value,
-                \str_contains($value, '.') => (float) $value,
+                \str_contains($value, '.') => (string) ($float = (float) $value) === $value ? $float : $value,
                 ($int = \filter_var($value, \FILTER_VALIDATE_INT)) !== false => $int,
                 default => $value,
             },
