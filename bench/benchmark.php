@@ -12,17 +12,17 @@ const DEFAULT_WARMUP = 2;
 const DEFAULT_LINES = 10000;
 const DEFAULT_SCENARIO = 'mixed';
 
-main($argv);
+\main($argv);
 
 /**
  * @param array<int, string> $argv
  */
 function main(array $argv): void
 {
-    $options = parseOptions($argv);
+    $options = \parseOptions($argv);
 
     if ($options['worker']) {
-        runWorker($options);
+        \runWorker($options);
         return;
     }
 
@@ -30,7 +30,7 @@ function main(array $argv): void
     $generatedFile = false;
 
     if ($file === null) {
-        $file = createFixture($options['scenario'], $options['lines']);
+        $file = \createFixture($options['scenario'], $options['lines']);
         $generatedFile = true;
     }
 
@@ -39,15 +39,15 @@ function main(array $argv): void
     try {
         $warmupResults = [];
         for ($iteration = 0; $iteration < $options['warmup']; $iteration++) {
-            $warmupResults[] = runWorkerProcess($scriptPath, $file);
+            $warmupResults[] = \runWorkerProcess($scriptPath, $file);
         }
 
         $results = [];
         for ($iteration = 0; $iteration < $options['iterations']; $iteration++) {
-            $results[] = runWorkerProcess($scriptPath, $file);
+            $results[] = \runWorkerProcess($scriptPath, $file);
         }
 
-        printReport(
+        \printReport(
             $file,
             $generatedFile,
             $options['scenario'],
@@ -87,7 +87,7 @@ function parseOptions(array $argv): array
 
     foreach (\array_slice($argv, 1) as $arg) {
         if ($arg === '--help' || $arg === '-h') {
-            printUsage();
+            \printUsage();
             exit(0);
         }
 
@@ -108,11 +108,11 @@ function parseOptions(array $argv): array
                 break;
 
             case 'iterations':
-                $options['iterations'] = requirePositiveInt($name, $value);
+                $options['iterations'] = \requirePositiveInt($name, $value);
                 break;
 
             case 'lines':
-                $options['lines'] = requirePositiveInt($name, $value);
+                $options['lines'] = \requirePositiveInt($name, $value);
                 break;
 
             case 'scenario':
@@ -127,7 +127,7 @@ function parseOptions(array $argv): array
                 break;
 
             case 'warmup':
-                $options['warmup'] = requireNonNegativeInt($name, $value);
+                $options['warmup'] = \requireNonNegativeInt($name, $value);
                 break;
 
             default:
@@ -145,20 +145,20 @@ function parseOptions(array $argv): array
 function printUsage(): void
 {
     $usage = <<<TXT
-Usage:
-  php bench/benchmark.php [--file=/path/to/.env] [--iterations=10] [--warmup=2]
-                          [--lines=10000] [--scenario=mixed]
+        Usage:
+          php bench/benchmark.php [--file=/path/to/.env] [--iterations=10] [--warmup=2]
+                                  [--lines=10000] [--scenario=mixed]
 
-Options:
-  --file         Benchmark an existing .env file instead of generating one
-  --iterations   Number of measured runs (default: 10)
-  --warmup       Number of warmup runs excluded from the summary (default: 2)
-  --lines        Number of generated logical entries when --file is omitted
-  --scenario     Generated fixture type: simple, mixed, interpolation
-  --help         Show this help
-TXT;
+        Options:
+          --file         Benchmark an existing .env file instead of generating one
+          --iterations   Number of measured runs (default: 10)
+          --warmup       Number of warmup runs excluded from the summary (default: 2)
+          --lines        Number of generated logical entries when --file is omitted
+          --scenario     Generated fixture type: simple, mixed, interpolation
+          --help         Show this help
+        TXT;
 
-    echo $usage . PHP_EOL;
+    echo $usage . \PHP_EOL;
 }
 
 function requirePositiveInt(string $name, string $value): int
@@ -199,7 +199,7 @@ function runWorkerProcess(string $scriptPath, string $file): array
 {
     $command = \sprintf(
         '%s %s --worker --file=%s',
-        \escapeshellarg(PHP_BINARY),
+        \escapeshellarg(\PHP_BINARY),
         \escapeshellarg($scriptPath),
         \escapeshellarg($file)
     );
@@ -252,7 +252,7 @@ function runWorker(array $options): void
         throw new InvalidArgumentException('--file is required in worker mode');
     }
 
-    resetEnvState();
+    \resetEnvState();
 
     if (\function_exists('gc_collect_cycles')) {
         \gc_collect_cycles();
@@ -320,7 +320,7 @@ function createFixture(string $scenario, int $lines): string
         \getmypid()
     );
 
-    \file_put_contents($path, buildFixtureContents($scenario, $lines));
+    \file_put_contents($path, \buildFixtureContents($scenario, $lines));
 
     return $path;
 }
@@ -328,9 +328,9 @@ function createFixture(string $scenario, int $lines): string
 function buildFixtureContents(string $scenario, int $lines): string
 {
     return match ($scenario) {
-        'simple' => buildSimpleFixture($lines),
-        'interpolation' => buildInterpolationFixture($lines),
-        default => buildMixedFixture($lines),
+        'simple' => \buildSimpleFixture($lines),
+        'interpolation' => \buildInterpolationFixture($lines),
+        default => \buildMixedFixture($lines),
     };
 }
 
@@ -426,61 +426,61 @@ function printReport(
         throw new RuntimeException('Failed to read benchmark file size: ' . $file);
     }
 
-    echo 'Benchmark target: ' . $file . PHP_EOL;
-    echo 'Generated file: ' . ($generatedFile ? 'yes' : 'no') . PHP_EOL;
-    echo 'Scenario: ' . $scenario . PHP_EOL;
-    echo 'File size: ' . formatBytes($fileSize) . PHP_EOL;
-    echo 'Warmup runs: ' . $warmup . PHP_EOL;
-    echo 'Measured runs: ' . $iterations . PHP_EOL;
-    echo PHP_EOL;
+    echo 'Benchmark target: ' . $file . \PHP_EOL;
+    echo 'Generated file: ' . ($generatedFile ? 'yes' : 'no') . \PHP_EOL;
+    echo 'Scenario: ' . $scenario . \PHP_EOL;
+    echo 'File size: ' . \formatBytes($fileSize) . \PHP_EOL;
+    echo 'Warmup runs: ' . $warmup . \PHP_EOL;
+    echo 'Measured runs: ' . $iterations . \PHP_EOL;
+    echo \PHP_EOL;
 
     if ($warmupResults !== []) {
-        echo 'Warmup:' . PHP_EOL;
+        echo 'Warmup:' . \PHP_EOL;
         foreach ($warmupResults as $index => $result) {
-            printf(
+            \printf(
                 "  #%d  time=%s  peak_used=%s  peak_real=%s  keys=%d\n",
                 $index + 1,
-                formatDuration($result['duration_ns']),
-                formatBytes($result['memory_peak_real_delta_bytes']),
-                formatBytes($result['memory_peak_delta_bytes']),
+                \formatDuration($result['duration_ns']),
+                \formatBytes($result['memory_peak_real_delta_bytes']),
+                \formatBytes($result['memory_peak_delta_bytes']),
                 $result['loaded_keys']
             );
         }
-        echo PHP_EOL;
+        echo \PHP_EOL;
     }
 
     echo "Runs:\n";
     foreach ($results as $index => $result) {
-        printf(
+        \printf(
             "  #%d  time=%s  used=%s  peak_used=%s  real=%s  peak_real=%s  keys=%d\n",
             $index + 1,
-            formatDuration($result['duration_ns']),
-            formatBytes($result['memory_real_delta_bytes']),
-            formatBytes($result['memory_peak_real_delta_bytes']),
-            formatBytes($result['memory_delta_bytes']),
-            formatBytes($result['memory_peak_delta_bytes']),
+            \formatDuration($result['duration_ns']),
+            \formatBytes($result['memory_real_delta_bytes']),
+            \formatBytes($result['memory_peak_real_delta_bytes']),
+            \formatBytes($result['memory_delta_bytes']),
+            \formatBytes($result['memory_peak_delta_bytes']),
             $result['loaded_keys']
         );
     }
 
-    echo PHP_EOL;
-    echo 'Summary:' . PHP_EOL;
-    echo '  time avg:  ' . formatDuration((int) average(\array_column($results, 'duration_ns'))) . PHP_EOL;
-    echo '  time min:  ' . formatDuration(\min(\array_column($results, 'duration_ns'))) . PHP_EOL;
-    echo '  time max:  ' . formatDuration(\max(\array_column($results, 'duration_ns'))) . PHP_EOL;
-    echo '  used avg:  ' . formatBytes((int) average(\array_column($results, 'memory_real_delta_bytes'))) . PHP_EOL;
-    echo '  used min:  ' . formatBytes(\min(\array_column($results, 'memory_real_delta_bytes'))) . PHP_EOL;
-    echo '  used max:  ' . formatBytes(\max(\array_column($results, 'memory_real_delta_bytes'))) . PHP_EOL;
-    echo '  peak used avg:  ' . formatBytes((int) average(\array_column($results, 'memory_peak_real_delta_bytes'))) . PHP_EOL;
-    echo '  peak used min:  ' . formatBytes(\min(\array_column($results, 'memory_peak_real_delta_bytes'))) . PHP_EOL;
-    echo '  peak used max:  ' . formatBytes(\max(\array_column($results, 'memory_peak_real_delta_bytes'))) . PHP_EOL;
-    echo '  real avg:  ' . formatBytes((int) average(\array_column($results, 'memory_delta_bytes'))) . PHP_EOL;
-    echo '  real min:  ' . formatBytes(\min(\array_column($results, 'memory_delta_bytes'))) . PHP_EOL;
-    echo '  real max:  ' . formatBytes(\max(\array_column($results, 'memory_delta_bytes'))) . PHP_EOL;
-    echo '  peak real avg:  ' . formatBytes((int) average(\array_column($results, 'memory_peak_delta_bytes'))) . PHP_EOL;
-    echo '  peak real min:  ' . formatBytes(\min(\array_column($results, 'memory_peak_delta_bytes'))) . PHP_EOL;
-    echo '  peak real max:  ' . formatBytes(\max(\array_column($results, 'memory_peak_delta_bytes'))) . PHP_EOL;
-    echo '  keys avg:  ' . number_format(average(\array_column($results, 'loaded_keys')), 2, '.', '') . PHP_EOL;
+    echo \PHP_EOL;
+    echo 'Summary:' . \PHP_EOL;
+    echo '  time avg:  ' . \formatDuration((int) \average(\array_column($results, 'duration_ns'))) . \PHP_EOL;
+    echo '  time min:  ' . \formatDuration(\min(\array_column($results, 'duration_ns'))) . \PHP_EOL;
+    echo '  time max:  ' . \formatDuration(\max(\array_column($results, 'duration_ns'))) . \PHP_EOL;
+    echo '  used avg:  ' . \formatBytes((int) \average(\array_column($results, 'memory_real_delta_bytes'))) . \PHP_EOL;
+    echo '  used min:  ' . \formatBytes(\min(\array_column($results, 'memory_real_delta_bytes'))) . \PHP_EOL;
+    echo '  used max:  ' . \formatBytes(\max(\array_column($results, 'memory_real_delta_bytes'))) . \PHP_EOL;
+    echo '  peak used avg:  ' . \formatBytes((int) \average(\array_column($results, 'memory_peak_real_delta_bytes'))) . \PHP_EOL;
+    echo '  peak used min:  ' . \formatBytes(\min(\array_column($results, 'memory_peak_real_delta_bytes'))) . \PHP_EOL;
+    echo '  peak used max:  ' . \formatBytes(\max(\array_column($results, 'memory_peak_real_delta_bytes'))) . \PHP_EOL;
+    echo '  real avg:  ' . \formatBytes((int) \average(\array_column($results, 'memory_delta_bytes'))) . \PHP_EOL;
+    echo '  real min:  ' . \formatBytes(\min(\array_column($results, 'memory_delta_bytes'))) . \PHP_EOL;
+    echo '  real max:  ' . \formatBytes(\max(\array_column($results, 'memory_delta_bytes'))) . \PHP_EOL;
+    echo '  peak real avg:  ' . \formatBytes((int) \average(\array_column($results, 'memory_peak_delta_bytes'))) . \PHP_EOL;
+    echo '  peak real min:  ' . \formatBytes(\min(\array_column($results, 'memory_peak_delta_bytes'))) . \PHP_EOL;
+    echo '  peak real max:  ' . \formatBytes(\max(\array_column($results, 'memory_peak_delta_bytes'))) . \PHP_EOL;
+    echo '  keys avg:  ' . \number_format(\average(\array_column($results, 'loaded_keys')), 2, '.', '') . \PHP_EOL;
 }
 
 /**
