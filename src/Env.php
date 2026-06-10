@@ -241,7 +241,9 @@ final class Env
      *
      * This method continues processing a quoted value from a previous line.
      * It checks if the current line contains the closing quote character and
-     * either completes the value or continues building it.
+     * either completes the value or continues building it. The value is closed
+     * at the first occurrence of the quote character; anything after it on the
+     * same line (e.g. an inline comment) is ignored.
      *
      * @param string $line The current line being processed
      * @param string $quoteChar The quote character (single or double) being used
@@ -251,8 +253,8 @@ final class Env
      */
     private function handleQuotedValue(string $line, string $quoteChar, string $value, string $key): array
     {
-        $rTrimLine = \rtrim($line);
-        if (($rTrimLine[\strlen($rTrimLine) - 1] ?? null) !== $quoteChar) {
+        $quotePos = \strpos($line, $quoteChar);
+        if ($quotePos === false) {
             return [
                 'inQuotes' => true,
                 'quoteChar' => $quoteChar,
@@ -265,7 +267,7 @@ final class Env
         return [
             'inQuotes' => false,
             'quoteChar' => '',
-            'value' => $value . \substr($rTrimLine, 0, -1),
+            'value' => $value . \substr($line, 0, $quotePos),
             'key' => $key,
             'shouldSetVariable' => true,
         ];
