@@ -13,7 +13,7 @@ Lite Env is a simple library for loading environment variables from .env files i
 - Zero dependencies
 - Simple and intuitive API
 - **Automatic loading** of `.env` and `.env.local` files
-- Support for variable interpolation (`${VAR}` or `$VAR` syntax)
+- Support for variable interpolation (`${VAR}` or `$VAR` syntax; single-quoted values stay literal, `\$` escapes a dollar sign)
 - Type conversion (strings, integers, floats, booleans, null)
 - Multiline values
 - Quoted values (both single and double quotes)
@@ -95,6 +95,8 @@ PORT=3000
 BASE_PATH=/var/www/app
 LOG_PATH=${BASE_PATH}/logs
 CACHE_PATH=$BASE_PATH/cache
+LITERAL='$BASE_PATH is not expanded in single quotes'
+PRICE="costs \$5"
 
 # Values with inline comments (space or tab before `#`)
 API_URL=https://api.example.com   # Production API endpoint
@@ -119,6 +121,17 @@ Lite Env automatically converts values to appropriate PHP types:
 - `null`, `(null)` → `null`
 - `empty`, `(empty)`, `""`, `''` → `''` (empty string)
 - Numeric values → integers or floats
+
+Only canonical numeric representations are converted: values with leading zeros (`01234`), trailing decimal zeros (`1.10`) or beyond the integer range are kept as strings, so zip codes, version numbers and long numeric IDs are never corrupted.
+
+## What's new in v2.2
+
+- **`0` is preserved** — `KEY=0` no longer collapses into an empty string.
+- **Safer numeric conversion** — only canonical numbers are converted to int/float; everything else stays a string (see Type Conversion above).
+- **Single-quoted values are literal** — variable interpolation is skipped inside single quotes, following dotenv convention.
+- **More robust quote parsing** — whitespace before an opening quote, a lone opening quote at the end of a line, and inline comments after a closing quote of a multiline value are now handled correctly.
+- **Reliable `\$` escaping** — escaped dollar signs are handled by the interpolation pattern itself; values containing the former internal placeholder text are no longer corrupted.
+- **Stricter file loading** — explicitly passed paths named `.env`/`.env.local` now throw when missing instead of being silently skipped.
 
 ## What's new in v2.1
 
