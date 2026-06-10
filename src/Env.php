@@ -11,7 +11,7 @@ final class Env
     private const array ENV_DEFAULT_PATHS = ['.env', '.env.local'];
 
     private const string VALID_KEY_PATTERN = '/^[A-Z_][A-Z0-9_]*$/';
-    private const string VARIABLE_PATTERN_COMBINED = '/(?:\$\{(?>[A-Z_][A-Z0-9_]*)\})|(?:(?<!\\\\)\$(?>([A-Z_][A-Z0-9_]*)))/';
+    private const string VARIABLE_PATTERN_COMBINED = '/\\\\\$|\$\{[A-Z_][A-Z0-9_]*\}|\$[A-Z_][A-Z0-9_]*/';
 
     private static array $cacheKeys = [];
 
@@ -322,25 +322,21 @@ final class Env
      */
     private function expandVariables(string $value): string
     {
-        if (!\str_contains($value, '${') && !\str_contains($value, '$')) {
+        if (!\str_contains($value, '$')) {
             return $value;
         }
 
-        // Handle escaped dollar signs first
-        $value = \str_replace('\\$', '___ESCAPED_DOLLAR___', $value);
-
-        // Extract variable names from the matches
-        $value = \preg_replace_callback(
+        return \preg_replace_callback(
             self::VARIABLE_PATTERN_COMBINED,
             static function (array $matches): string {
-                // Determine if it's a braced or simple variable
-                if (\str_starts_with($matches[0], '${')) {
-                    // Extract variable name from ${VAR} format
-                    $varName = \substr($matches[0], 2, -1);
-                } else {
-                    // Extract variable name from $VAR format
-                    $varName = $matches[1] ?? '';
+                // An escaped dollar sign (\$) becomes a literal $
+                if (\str_starts_with($matches[0], '\\')) {
+                    return '$';
                 }
+
+                $varName = \str_starts_with($matches[0], '${')
+                    ? \substr($matches[0], 2, -1)
+                    : \substr($matches[0], 1);
 
                 $varValue = self::get($varName, '');
 
@@ -353,9 +349,6 @@ final class Env
             },
             $value
         );
-
-        // Restore escaped dollar signs
-        return \str_replace('___ESCAPED_DOLLAR___', '$', $value);
     }
 
     /**
