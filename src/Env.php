@@ -63,8 +63,8 @@ final class Env
                 throw new RuntimeException('The file "' . $file . '" exists but cannot be read');
             }
 
-            foreach ($env->parseFile($file) as $key => $value) {
-                $env->setEnvironmentVariable($key, $value);
+            foreach ($env->parseFile($file) as $key => [$value, $raw]) {
+                $env->setEnvironmentVariable($key, $value, $raw);
             }
         }
     }
@@ -77,7 +77,8 @@ final class Env
      * strings, comments, and variable interpolation.
      *
      * @param string $file The path to the .env file to parse
-     * @return \Generator<string, string> Yields key-value pairs of environment variables
+     * @return \Generator<string, array{string, bool}> Yields key => [value, raw] pairs;
+     *         raw is true for single-quoted values that must not be interpolated
      * @throws RuntimeException If the file cannot be opened
      */
     private function parseFile(string $file): \Generator
@@ -102,6 +103,7 @@ final class Env
                     'value' => $value,
                     'key' => $key,
                     'shouldSetVariable' => $shouldSetVariable,
+                    'raw' => $raw,
                 ] = $this->processLine($line, $inQuotes, $quoteChar, $value, $key);
             } catch (RuntimeException $e) {
                 \trigger_error(
@@ -113,14 +115,14 @@ final class Env
             }
 
             if ($shouldSetVariable) {
-                yield $key => $value;
+                yield $key => [$value, $raw];
                 $key = '';
                 $value = '';
             }
         }
 
         if ($key) {
-            yield $key => $value;
+            yield $key => [$value, $quoteChar === "'"];
         }
 
         \fclose($stream);
@@ -138,7 +140,7 @@ final class Env
      * @param string $quoteChar The quote character (single or double) if inside a quoted value
      * @param string $value The current value being built (for multiline values)
      * @param string $key The current key being processed
-     * @return array{inQuotes: bool, quoteChar: string, value: string, key: string, shouldSetVariable: bool} Processing state and results
+     * @return array{inQuotes: bool, quoteChar: string, value: string, key: string, shouldSetVariable: bool, raw: bool} Processing state and results; raw is true for single-quoted values that must not be interpolated
      * @throws RuntimeException If the line has invalid format
      */
     private function processLine(
@@ -160,6 +162,7 @@ final class Env
                 'value' => '',
                 'key' => '',
                 'shouldSetVariable' => false,
+                'raw' => false,
             ];
         }
 
@@ -183,6 +186,7 @@ final class Env
                 'value' => '',
                 'key' => $key,
                 'shouldSetVariable' => true,
+                'raw' => false,
             ];
         }
 
@@ -197,6 +201,7 @@ final class Env
                     'value' => \substr($value, 1, -1),
                     'key' => $key,
                     'shouldSetVariable' => true,
+                    'raw' => $quoteChar === "'",
                 ];
             }
 
@@ -209,6 +214,7 @@ final class Env
                     'value' => \substr($value, 0, \strpos($value, $quoteChar)),
                     'key' => $key,
                     'shouldSetVariable' => true,
+                    'raw' => $quoteChar === "'",
                 ];
             }
 
@@ -218,6 +224,7 @@ final class Env
                 'value' => $value,
                 'key' => $key,
                 'shouldSetVariable' => false,
+                'raw' => $quoteChar === "'",
             ];
         }
 
@@ -233,6 +240,7 @@ final class Env
             'value' => $value,
             'key' => $key,
             'shouldSetVariable' => true,
+            'raw' => false,
         ];
     }
 
@@ -249,7 +257,7 @@ final class Env
      * @param string $quoteChar The quote character (single or double) being used
      * @param string $value The value accumulated so far
      * @param string $key The environment variable key
-     * @return array{inQuotes: bool, quoteChar: string, value: string, key: string, shouldSetVariable: bool} Updated processing state
+     * @return array{inQuotes: bool, quoteChar: string, value: string, key: string, shouldSetVariable: bool, raw: bool} Updated processing state
      */
     private function handleQuotedValue(string $line, string $quoteChar, string $value, string $key): array
     {
@@ -261,6 +269,7 @@ final class Env
                 'value' => $value . $line,
                 'key' => $key,
                 'shouldSetVariable' => false,
+                'raw' => $quoteChar === "'",
             ];
         }
 
@@ -270,6 +279,7 @@ final class Env
             'value' => $value . \substr($line, 0, $quotePos),
             'key' => $key,
             'shouldSetVariable' => true,
+            'raw' => $quoteChar === "'",
         ];
     }
 
@@ -278,16 +288,20 @@ final class Env
      *
      * This method sets an environment variable using PHP's putenv() function
      * and also updates the $_ENV and $_SERVER superglobals. It expands any
-     * variable references and converts the value to the appropriate type.
+     * variable references (unless the value is raw, i.e. single-quoted) and
+     * converts the value to the appropriate type.
      *
      * @param string $key The environment variable name
      * @param string $value The environment variable value (before processing)
+     * @param bool $raw Whether the value is a literal that must not be interpolated
      * @return void
      */
-    private function setEnvironmentVariable(string $key, string $value): void
+    private function setEnvironmentVariable(string $key, string $value, bool $raw = false): void
     {
         self::$cacheKeys[$key] = true;
-        $value = $this->expandVariables($value);
+        if (!$raw) {
+            $value = $this->expandVariables($value);
+        }
 
         \putenv("{$key}={$value}");
 
