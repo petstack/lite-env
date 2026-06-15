@@ -27,6 +27,24 @@ final class Env
     public static bool $disableDefaultPaths = false;
 
     /**
+     * Controls whether values from .env files overwrite variables that already
+     * exist in the real environment.
+     *
+     * When false (default, immutable), variables present in
+     * getenv()/$_ENV/$_SERVER before load() runs are preserved, so the real
+     * environment (OS, container, CI) stays authoritative and .env only fills
+     * in gaps. Variables set by this library during the same process are still
+     * overridable, so a later .env file (e.g. .env.local) overrides an earlier
+     * one.
+     *
+     * When true (mutable), every value from a .env file overwrites whatever was
+     * there before.
+     *
+     * @var bool
+     */
+    public static bool $overwriteExisting = false;
+
+    /**
      * Private constructor to prevent direct instantiation.
      *
      * The Env class is designed to work with static methods only.
@@ -42,6 +60,9 @@ final class Env
      * By default, this method loads .env and .env.local files from the current
      * directory (if they exist), followed by any explicitly specified files.
      * The loading order ensures that later files can override earlier ones.
+     *
+     * Existing environment variables are preserved by default; set
+     * Env::$overwriteExisting = true to make .env values overwrite them.
      *
      * @param string ...$paths Zero or more paths to additional .env files to load
      * @return void
@@ -299,6 +320,9 @@ final class Env
      * variable references (unless the value is raw, i.e. single-quoted) and
      * converts the value to the appropriate type.
      *
+     * In the default immutable mode a variable that already exists in the real
+     * environment (and was not set by this library) is left untouched.
+     *
      * @param string $key The environment variable name
      * @param string $value The environment variable value (before processing)
      * @param bool $raw Whether the value is a literal that must not be interpolated
@@ -306,6 +330,15 @@ final class Env
      */
     private function setEnvironmentVariable(string $key, string $value, bool $raw = false): void
     {
+        // Immutable by default: do not clobber a variable that already exists in
+        // the real environment. A key already in $cacheKeys was set by us during
+        // this process and may be overridden (later files override earlier ones);
+        // because that case is excluded first, a true has() here can only mean a
+        // pre-existing real environment variable.
+        if (!self::$overwriteExisting && !isset(self::$cacheKeys[$key]) && self::has($key)) {
+            return;
+        }
+
         self::$cacheKeys[$key] = true;
         if (!$raw) {
             $value = $this->expandVariables($value);

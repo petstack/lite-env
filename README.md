@@ -19,6 +19,7 @@ Lite Env is a simple library for loading environment variables from .env files i
 - Quoted values (both single and double quotes)
 - Inline comments support with proper whitespace handling (space or tab before `#`)
 - **Multiple file loading** with single method call
+- **Immutable by default** — variables already set in the real environment are never overwritten (opt out with `Env::$overwriteExisting`)
 - Comprehensive error handling and validation
 
 ## Installation
@@ -76,6 +77,20 @@ Env::load('custom.env');
 // To load only specific files without defaults:
 Env::$disableDefaultPaths = true;
 Env::load('production.env', 'secrets.env');
+```
+
+### Existing environment variables
+
+By default Lite Env does **not** overwrite variables that already exist in the
+real environment (set by the OS, a container, or CI) — `.env` files only fill in
+what is missing, and the real environment stays authoritative. A later `.env`
+file still overrides an earlier one within the same load.
+
+To restore the old behavior and let `.env` values overwrite existing variables:
+
+```php
+Env::$overwriteExisting = true;
+Env::load();
 ```
 
 ### Example .env File

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `Env::$overwriteExisting` flag (default `false`): set it to `true` to restore the previous behavior where `.env` values overwrite variables that already exist in the environment
+
+### Changed
+- Existing environment variables are no longer overwritten by default: values already present in `getenv()`, `$_ENV` or `$_SERVER` before `Env::load()` runs are preserved, so the real environment (OS, container, CI) stays authoritative. A later `.env` file still overrides an earlier one within the same load
+
 ## [2.2.0] - 2026-06-11
 
 ### Fixed
